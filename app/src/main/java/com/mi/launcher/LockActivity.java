@@ -112,17 +112,22 @@ public class LockActivity extends Activity {
         col.setPadding(dp(20), dp(60), dp(20), dp(120));
 
         lstyle = sp.getInt("lockstyle", 0);
+        boolean dotDate = lstyle == 0 || lstyle == 3 || lstyle == 6 || lstyle == 8;
         if (lstyle == 2) col.setGravity(Gravity.START);
 
         col.addView(new Glyph(this, Glyph.LOCK), new LinearLayout.LayoutParams(dp(20), dp(20)));
 
-        dateTv = tv(lstyle == 0 ? 13 : 16, 0xE6FFFFFF);
-        if (lstyle == 0) {
-            dateTv.setTypeface(Typeface.MONOSPACE);
-            dateTv.setLetterSpacing(0.12f);
+        if (dotDate) {
+            DotText dd = new DotText(this);
+            dd.setTextColor(0xE6FFFFFF);
+            dd.setCellPx(dp(2.2f));
+            dd.setGravity(Gravity.CENTER_HORIZONTAL);
+            dateTv = dd;
+        } else {
+            dateTv = tv(16, 0xE6FFFFFF);
         }
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(WRAP, WRAP);
-        dlp.topMargin = dp(lstyle == 1 ? 14 : 8);
+        dlp.topMargin = dp(lstyle == 1 ? 14 : 10);
 
         if (lstyle == 1) col.addView(dateTv, dlp);
 
@@ -133,6 +138,8 @@ public class LockActivity extends Activity {
             LinearLayout.LayoutParams clk = new LinearLayout.LayoutParams(WRAP, WRAP);
             clk.topMargin = dp(18);
             col.addView(dotClock, clk);
+        } else if (lstyle >= 3) {
+            col.addView(new ClockFace(this, lstyle), new LinearLayout.LayoutParams(MATCH, WRAP));
         } else {
             clockTv = tv(lstyle == 1 ? 96 : 64, Color.WHITE);
             clockTv.setTypeface(Typeface.create("sans-serif-thin", Typeface.NORMAL));
@@ -140,6 +147,13 @@ public class LockActivity extends Activity {
             col.addView(clockTv);
         }
         if (lstyle != 1) col.addView(dateTv, dlp);
+
+        LinearLayout lw = lockWidgets();
+        if (lw != null) {
+            LinearLayout.LayoutParams lwl = new LinearLayout.LayoutParams(MATCH, WRAP);
+            lwl.topMargin = dp(18);
+            col.addView(lw, lwl);
+        }
 
         IslandView card = new IslandView(this);
         card.setEmbedded(true, true);
@@ -218,7 +232,7 @@ public class LockActivity extends Activity {
         if (dotClock != null) dotClock.setText(t);
         String ds = new SimpleDateFormat("EEEE d 'de' MMMM", new Locale("es", "MX")).format(now);
         String dsf = ds.substring(0, 1).toUpperCase(new Locale("es")) + ds.substring(1);
-        dateTv.setText(lstyle == 0 ? dsf.toUpperCase(new Locale("es")) : dsf);
+        dateTv.setText(dsf);
     }
 
     void fillNotifs() {
@@ -259,6 +273,44 @@ public class LockActivity extends Activity {
             notifBox.addView(row, lp);
             n++;
         }
+    }
+
+    LinearLayout lockWidgets() {
+        String s = sp.getString("lockw", "");
+        if (s == null || s.isEmpty()) return null;
+        LinearLayout colw = new LinearLayout(this);
+        colw.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout pend = null;
+        for (String tok : s.split(",")) {
+            String[] kv = tok.split(":");
+            int kind, style;
+            try {
+                kind = Integer.parseInt(kv[0]);
+                style = Integer.parseInt(kv[1]);
+            } catch (Exception e) {
+                continue;
+            }
+            if (kind < 0 || kind >= WidgetView.COUNT) continue;
+            WidgetView wv = new WidgetView(this, kind, style);
+            if (WidgetView.wide(kind)) {
+                pend = null;
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(MATCH, dp(WidgetView.heightDp(kind)));
+                lp.topMargin = dp(8);
+                colw.addView(wv, lp);
+            } else {
+                if (pend == null || pend.getChildCount() >= 2) {
+                    pend = new LinearLayout(this);
+                    pend.setOrientation(LinearLayout.HORIZONTAL);
+                    LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(MATCH, WRAP);
+                    rl.topMargin = dp(8);
+                    colw.addView(pend, rl);
+                }
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(WidgetView.heightDp(kind)), 1f);
+                lp.setMargins(dp(3), 0, dp(3), 0);
+                pend.addView(wv, lp);
+            }
+        }
+        return colw;
     }
 
     View roundGlyph(int type) {

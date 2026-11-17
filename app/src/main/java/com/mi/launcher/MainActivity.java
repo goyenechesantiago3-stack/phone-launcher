@@ -309,6 +309,129 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------ íconos
 
+    boolean dotUi() { return sp.getBoolean("dotui", false); }
+
+    boolean dotHome() { return dotUi() || sp.getInt("clock", 0) == 1; }
+
+    // texto normal o de puntos (estilo Nothing) segun el ajuste
+    TextView lbl(String s, float sizeSp, int color) {
+        if (dotUi()) {
+            DotText dt = new DotText(this);
+            dt.setTextColor(color);
+            dt.setCellPx(dp(sizeSp / 7f));
+            dt.setText(s);
+            return dt;
+        }
+        TextView t = tv(sizeSp, color);
+        t.setText(s);
+        return t;
+    }
+
+    Bitmap gloss(Bitmap b) {
+        int s = b.getWidth();
+        Bitmap out = b.copy(Bitmap.Config.ARGB_8888, true);
+        Canvas c = new Canvas(out);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setShader(new android.graphics.LinearGradient(0, 0, 0, s * 0.6f, 0x44FFFFFF, 0x00FFFFFF,
+                android.graphics.Shader.TileMode.CLAMP));
+        p.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP));
+        c.drawRect(0, 0, s, s * 0.6f, p);
+        return out;
+    }
+
+    static float lum(int px) {
+        return 0.299f * ((px >> 16) & 255) + 0.587f * ((px >> 8) & 255) + 0.114f * (px & 255);
+    }
+
+    // icono estilo Nothing: silueta blanca (o puntos) sobre fondo negro
+    Bitmap nothingIcon(AppItem a, boolean dots) {
+        int s = icoPx;
+        Drawable dr = a.ri.loadIcon(pm);
+        Bitmap glyph = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888);
+        Canvas gc = new Canvas(glyph);
+        Drawable fg = null;
+        if (dr instanceof android.graphics.drawable.AdaptiveIconDrawable) {
+            fg = ((android.graphics.drawable.AdaptiveIconDrawable) dr).getForeground();
+        }
+        if (fg != null) {
+            int o = s / 4;
+            fg.setBounds(-o, -o, s + o, s + o);
+            fg.draw(gc);
+        } else {
+            dr.setBounds(0, 0, s, s);
+            dr.draw(gc);
+        }
+        int[] px = new int[s * s];
+        glyph.getPixels(px, 0, s, 0, 0, s, s);
+        int solid = 0;
+        for (int i = 0; i < px.length; i++) if ((px[i] >>> 24) > 40) solid++;
+        if (solid < px.length * 0.02f) {
+            glyph.eraseColor(0);
+            dr.setBounds(0, 0, s, s);
+            dr.draw(gc);
+            glyph.getPixels(px, 0, s, 0, 0, s, s);
+            solid = px.length;
+        }
+        boolean opaque = solid > px.length * 0.9f;
+        float ref = lum(px[0]);
+        float[] m = new float[px.length];
+        for (int i = 0; i < px.length; i++) {
+            if (opaque) m[i] = Math.min(1f, Math.abs(lum(px[i]) - ref) / 80f);
+            else m[i] = (px[i] >>> 24) / 255f;
+        }
+        Bitmap out = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888);
+        Canvas oc = new Canvas(out);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float r = shapeRadius() * s;
+        p.setColor(0xFF0A0A0C);
+        oc.drawRoundRect(new RectF(0, 0, s, s), r, r, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(dp(1));
+        p.setColor(0x33FFFFFF);
+        oc.drawRoundRect(new RectF(dp(0.5f), dp(0.5f), s - dp(0.5f), s - dp(0.5f)), r, r, p);
+        p.setStyle(Paint.Style.FILL);
+        if (!dots) {
+            int[] wp = new int[px.length];
+            for (int i = 0; i < wp.length; i++) wp[i] = (((int) (m[i] * 255f)) << 24) | 0x00FFFFFF;
+            Bitmap white = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888);
+            white.setPixels(wp, 0, s, 0, 0, s, s);
+            oc.save();
+            oc.scale(0.8f, 0.8f, s / 2f, s / 2f);
+            oc.drawBitmap(white, 0, 0, new Paint(Paint.FILTER_BITMAP_FLAG));
+            oc.restore();
+        } else {
+            int g = 14;
+            float cell = s * 0.74f / g;
+            float ox = (s - cell * g) / 2f;
+            float blk = s / (float) g;
+            for (int gy = 0; gy < g; gy++) {
+                for (int gx = 0; gx < g; gx++) {
+                    float sum = 0;
+                    int cnt = 0;
+                    int x0 = (int) (gx * blk), x1 = (int) ((gx + 1) * blk);
+                    int y0 = (int) (gy * blk), y1 = (int) ((gy + 1) * blk);
+                    for (int yy = y0; yy < y1 && yy < s; yy++) {
+                        for (int xx = x0; xx < x1 && xx < s; xx++) {
+                            sum += m[yy * s + xx];
+                            cnt++;
+                        }
+                    }
+                    float v = cnt > 0 ? sum / cnt : 0f;
+                    float cx = ox + (gx + 0.5f) * cell;
+                    float cy = ox + (gy + 0.5f) * cell;
+                    if (v > 0.30f) {
+                        p.setColor(0xFFFFFFFF);
+                        oc.drawCircle(cx, cy, cell * 0.46f * Math.min(1f, 0.6f + v * 0.5f), p);
+                    } else {
+                        p.setColor(0x24FFFFFF);
+                        oc.drawCircle(cx, cy, cell * 0.13f, p);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
     float shapeRadius() {
         int s = sp.getInt("shape", 1);
         if (s == 0) return 0.5f;
@@ -353,7 +476,17 @@ public class MainActivity extends Activity {
             dr.setBounds(0, 0, icoPx, icoPx);
             dr.draw(c);
         }
-        b = shaped(src);
+        int is = sp.getInt("iconstyle", 0);
+        b = null;
+        if (is >= 2 && !f.exists()) {
+            try {
+                b = nothingIcon(a, is == 3);
+            } catch (Exception e) {
+                b = null;
+            }
+        }
+        if (b == null) b = shaped(src);
+        if (is == 1) b = gloss(b);
         cache.put(a.pkg, b);
         return b;
     }
@@ -852,11 +985,24 @@ public class MainActivity extends Activity {
             LinearLayout header = new LinearLayout(this);
             header.setOrientation(LinearLayout.VERTICAL);
             header.setGravity(Gravity.CENTER_HORIZONTAL);
-            greetTv = tv(18, Color.WHITE);
-            header.addView(greetTv);
+            if (dotHome()) {
+                DotText gd0 = new DotText(this);
+                gd0.setTextColor(Color.WHITE);
+                gd0.setCellPx(dp(3f));
+                greetTv = gd0;
+            } else {
+                greetTv = tv(18, Color.WHITE);
+            }
+            LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(WRAP, WRAP);
+            glp.bottomMargin = dotHome() ? dp(12) : 0;
+            header.addView(greetTv, glp);
             int style = sp.getInt("clock", 0);
             View clockView;
-            if (style == 1) {
+            if (style >= 3) {
+                ClockFace cf = new ClockFace(this, style);
+                clockView = cf;
+                header.addView(cf, new LinearLayout.LayoutParams(MATCH, WRAP));
+            } else if (style == 1) {
                 dotClock = new DotClockView(this);
                 dotClock.setCell(dp(9));
                 dotClock.setColors(Color.WHITE, 0x22FFFFFF);
@@ -875,8 +1021,17 @@ public class MainActivity extends Activity {
                     return true;
                 }
             });
-            dateTv = tv(16, 0xCCFFFFFF);
-            header.addView(dateTv);
+            if (dotHome()) {
+                DotText dd0 = new DotText(this);
+                dd0.setTextColor(0xCCFFFFFF);
+                dd0.setCellPx(dp(2.2f));
+                dateTv = dd0;
+            } else {
+                dateTv = tv(16, 0xCCFFFFFF);
+            }
+            LinearLayout.LayoutParams dtl = new LinearLayout.LayoutParams(WRAP, WRAP);
+            dtl.topMargin = dotHome() ? dp(12) : 0;
+            header.addView(dateTv, dtl);
             LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(MATCH, WRAP);
             hp.bottomMargin = dp(18);
             col.addView(header, hp);
@@ -1035,22 +1190,11 @@ public class MainActivity extends Activity {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
 
-        TextView head = tv(26, Color.WHITE);
-        head.setTypeface(font, Typeface.BOLD);
-        head.setText("Widgets");
+        TextView head = lbl("Widgets", 26, Color.WHITE);
+        if (!dotUi()) head.setTypeface(font, Typeface.BOLD);
         col.addView(head);
 
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, dp(130), 1f);
-        l1.rightMargin = dp(6);
-        LinearLayout.LayoutParams l2 = new LinearLayout.LayoutParams(0, dp(130), 1f);
-        l2.leftMargin = dp(6);
-        row.addView(calendarCard(), l1);
-        row.addView(batteryCard(), l2);
-        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(MATCH, WRAP);
-        rlp.topMargin = dp(14);
-        col.addView(row, rlp);
+        addBuiltinWidgets(col);
 
         IslandView mc = new IslandView(this);
         mc.setEmbedded(true, false);
@@ -1400,10 +1544,9 @@ public class MainActivity extends Activity {
         LinearLayout t = new LinearLayout(this);
         t.setOrientation(LinearLayout.VERTICAL);
         t.setGravity(Gravity.CENTER);
-        t.setBackground(glass(glassFill(), 0x66FFFFFF, 20));
+        t.setBackground(dotUi() ? glass(0x66000000, 0xCCFFFFFF, 14) : glass(glassFill(), 0x44FFFFFF, 28));
         t.addView(new Glyph(this, glyph), new LinearLayout.LayoutParams(dp(26), dp(26)));
-        TextView l = tv(12, Color.WHITE);
-        l.setText(label);
+        TextView l = lbl(label, 12, Color.WHITE);
         l.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(WRAP, WRAP);
         ll.topMargin = dp(6);
@@ -1524,11 +1667,9 @@ public class MainActivity extends Activity {
         LinearLayout nh = new LinearLayout(this);
         nh.setOrientation(LinearLayout.HORIZONTAL);
         nh.setGravity(Gravity.CENTER_VERTICAL);
-        TextView nt = tv(18, Color.WHITE);
-        nt.setTypeface(font, Typeface.BOLD);
-        nt.setText("Notificaciones");
-        TextView clear = tv(13, accent);
-        clear.setText("Borrar todo");
+        TextView nt = lbl("Notificaciones", 18, Color.WHITE);
+        if (!dotUi()) nt.setTypeface(font, Typeface.BOLD);
+        TextView clear = lbl("Borrar todo", 13, accent);
         clear.setPadding(dp(10), dp(6), 0, dp(6));
         clear.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -2159,13 +2300,13 @@ public class MainActivity extends Activity {
         SharedPreferences.Editor e = sp.edit();
         if (p == 0) {
             e.putInt("shape", 1).putBoolean("mono", false).putInt("accent", 0xFF0A84FF)
-                    .putInt("glass", 2).putInt("clock", 0).putInt("anim", 0).putBoolean("blur", true).putInt("wstyle", 0).putInt("lockstyle", 1).putInt("fontstyle", 1);
+                    .putInt("glass", 2).putInt("clock", 0).putInt("anim", 0).putBoolean("blur", true).putInt("wstyle", 0).putInt("lockstyle", 1).putInt("fontstyle", 1).putInt("iconstyle", 1).putBoolean("dotui", false).putString("bw", "0:0,1:0,3:0");
         } else if (p == 1) {
             e.putInt("shape", 0).putBoolean("mono", true).putInt("accent", 0xFFD71921)
-                    .putInt("glass", 0).putInt("clock", 1).putInt("anim", 1).putBoolean("blur", false).putInt("wstyle", 1).putInt("lockstyle", 0).putInt("fontstyle", 2);
+                    .putInt("glass", 0).putInt("clock", 1).putInt("anim", 1).putBoolean("blur", false).putInt("wstyle", 1).putInt("lockstyle", 0).putInt("fontstyle", 2).putInt("iconstyle", 2).putBoolean("dotui", true).putString("bw", "0:1,1:1,3:1");
         } else {
             e.putInt("shape", 2).putBoolean("mono", false).putInt("accent", 0xFFFF2D95)
-                    .putInt("glass", 1).putInt("clock", 2).putInt("anim", 0).putBoolean("blur", true).putInt("wstyle", 0).putInt("lockstyle", 2).putInt("fontstyle", 0);
+                    .putInt("glass", 1).putInt("clock", 2).putInt("anim", 0).putBoolean("blur", true).putInt("wstyle", 0).putInt("lockstyle", 2).putInt("fontstyle", 0).putInt("iconstyle", 0).putBoolean("dotui", false).putString("bw", "0:2,1:2");
         }
         e.apply();
         font = Hub.font(this);
@@ -2182,7 +2323,9 @@ public class MainActivity extends Activity {
                 "Tama\u00F1o de \u00EDconos",
                 "Columnas (4 o 5)",
                 chk(sp.getBoolean("labels", true), "Mostrar nombres de apps"),
-                "Estilo del reloj"}, i -> {
+                "Estilo del reloj",
+                "Estilo de iconos de apps",
+                chk(sp.getBoolean("dotui", false), "Texto y centro de control estilo Nothing (puntos)")}, i -> {
             switch (i) {
                 case 0:
                     pickInt("Forma de los \u00EDconos", new String[]{"C\u00EDrculo", "Squircle (iPhone)", "Cuadrado redondeado"},
@@ -2204,7 +2347,17 @@ public class MainActivity extends Activity {
                     break;
                 case 6: toggle("labels", true); break;
                 case 7:
-                    pickInt("Estilo del reloj", new String[]{"Digital grueso", "Puntos (Nothing)", "Fino"}, "clock", new int[]{0, 1, 2});
+                    pickInt("Estilo del reloj", new String[]{"Digital grueso", "Puntos (Nothing)", "Fino",
+                            "Puntos apilado (Nothing)", "Apilado bold (iPhone)", "Anal\u00F3gico",
+                            "Anillo de puntos (Nothing)", "Barra del d\u00EDa (iPhone)", "Palabras (Nothing)"},
+                            "clock", new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8});
+                    break;
+                case 8:
+                    pickInt("Estilo de iconos", new String[]{"Original", "iPhone (brillo y cristal)",
+                            "Nothing (silueta blanca)", "Nothing (puntos)"}, "iconstyle", new int[]{0, 1, 2, 3});
+                    break;
+                case 9:
+                    toggle("dotui", false);
                     break;
                 default: break;
             }
@@ -2302,10 +2455,16 @@ public class MainActivity extends Activity {
         menu("Isla din\u00E1mica y notificaciones", new String[]{
                 chk(sp.getBoolean("island_overlay", true), "Mostrar la isla sobre otras apps"),
                 (notifAccess() ? "\u2713 " : "\u2717 ") + "Acceso a notificaciones (necesario)",
-                (overlayOk() ? "\u2713 " : "\u2717 ") + "Permiso: mostrar sobre otras apps"}, i -> {
+                (overlayOk() ? "\u2713 " : "\u2717 ") + "Permiso: mostrar sobre otras apps",
+                "Paso 1: permitir ajustes restringidos (abre Info de la app)"}, i -> {
             if (i == 0) toggle("island_overlay", true);
             else if (i == 1) askNotifAccess();
-            else askOverlay();
+            else if (i == 2) askOverlay();
+            else {
+                toast("Toca los tres puntos arriba a la derecha y elige Permitir ajustes restringidos");
+                startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getPackageName())));
+            }
         });
     }
 
@@ -2331,12 +2490,27 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Cancelar", null).show();
     }
 
+    void lockWidgetAdd() {
+        menu("Widget para el bloqueo", WidgetView.NAMES, k -> menu("Estilo", WidgetView.STYLE_NAMES, st -> {
+            List<String> l = csv(sp.getString("lockw", ""));
+            if (l.size() >= 4) {
+                toast("M\u00E1ximo 4 widgets en el bloqueo");
+                return;
+            }
+            l.add(k + ":" + st);
+            putCsv("lockw", l);
+            toast("Agregado. M\u00EDralo con Probarla ahora");
+        }));
+    }
+
     void lockMenu() {
         final boolean on = sp.getBoolean("lock_on", false);
         menu("Pantalla de bloqueo propia", new String[]{
                 chk(on, "Usar mi pantalla de bloqueo"),
                 "Probarla ahora",
-                "Estilo de la pantalla de bloqueo",
+                "Estilo del reloj de bloqueo",
+                "Agregar widget al bloqueo",
+                "Quitar widgets del bloqueo",
                 Hub.pinLen(this) > 0 ? "Cambiar PIN" : "Crear PIN",
                 "Quitar PIN",
                 (overlayOk() ? "\u2713 " : "\u2717 ") + "Permiso: mostrar sobre otras apps",
@@ -2352,16 +2526,23 @@ public class MainActivity extends Activity {
                     break;
                 case 1: startActivity(new Intent(this, LockActivity.class)); break;
                 case 2:
-                    pickInt("Estilo de bloqueo", new String[]{"Nothing (reloj de puntos)", "iPhone (reloj fino grande)", "Minimalista (a la izquierda)"},
-                            "lockstyle", new int[]{0, 1, 2});
+                    pickInt("Reloj de bloqueo", new String[]{"Nothing (reloj de puntos)", "iPhone (fino grande)",
+                            "Minimalista", "Puntos apilado (Nothing)", "Apilado bold (iPhone)", "Anal\u00F3gico",
+                            "Anillo de puntos (Nothing)", "Barra del d\u00EDa (iPhone)", "Palabras (Nothing)"},
+                            "lockstyle", new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8});
                     break;
-                case 3: pinDialog(); break;
+                case 3: lockWidgetAdd(); break;
                 case 4:
+                    sp.edit().remove("lockw").apply();
+                    toast("Widgets del bloqueo quitados");
+                    break;
+                case 5: pinDialog(); break;
+                case 6:
                     Hub.clearPin(this);
                     toast("PIN quitado");
                     break;
-                case 5: askOverlay(); break;
-                case 6: askNotifAccess(); break;
+                case 7: askOverlay(); break;
+                case 8: askNotifAccess(); break;
                 default: break;
             }
         });
@@ -2415,51 +2596,60 @@ public class MainActivity extends Activity {
         ScrollView sv = new ScrollView(this);
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        col.setPadding(dp(16), dp(12), dp(16), dp(12));
+        col.setPadding(dp(14), dp(12), dp(14), dp(12));
 
-        TextView h1 = tv(16, Color.WHITE);
+        TextView h1 = tv(17, Color.WHITE);
         h1.setTypeface(font, Typeface.BOLD);
         h1.setText("Widgets del launcher");
         col.addView(h1);
         TextView sub = tv(12, 0xAAFFFFFF);
-        sub.setText("Toca un estilo para aplicarlo");
+        sub.setText("Desliza cada fila para ver los estilos y toca el que quieras");
         col.addView(sub);
 
-        LinearLayout styles = new LinearLayout(this);
-        styles.setOrientation(LinearLayout.HORIZONTAL);
-        String[] sn = {"iPhone", "Nothing"};
-        int cur = sp.getInt("wstyle", 0);
-        for (int s = 0; s < 2; s++) {
-            final int st = s;
-            LinearLayout cc = new LinearLayout(this);
-            cc.setOrientation(LinearLayout.VERTICAL);
-            cc.setPadding(dp(4), dp(10), dp(4), dp(4));
-            TextView nm = tv(13, cur == s ? Color.WHITE : 0xAAFFFFFF);
-            nm.setText((cur == s ? "\u2713 " : "") + sn[s]);
-            nm.setGravity(Gravity.CENTER);
-            cc.addView(nm, new LinearLayout.LayoutParams(MATCH, WRAP));
-            LinearLayout.LayoutParams c1 = new LinearLayout.LayoutParams(MATCH, dp(104));
-            c1.topMargin = dp(6);
-            c1.setMargins(dp(4), dp(6), dp(4), 0);
-            cc.addView(calendarCard(s, false), c1);
-            LinearLayout.LayoutParams c2 = new LinearLayout.LayoutParams(MATCH, dp(104));
-            c2.setMargins(dp(4), dp(8), dp(4), 0);
-            cc.addView(batteryCard(s, false), c2);
-            cc.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) {
-                    sp.edit().putInt("wstyle", st).apply();
-                    if (dref[0] != null) dref[0].dismiss();
-                    rebuildUi();
-                }
-            });
-            styles.addView(cc, new LinearLayout.LayoutParams(0, WRAP, 1f));
+        for (int k = 0; k < WidgetView.COUNT; k++) {
+            final int kind = k;
+            TextView nm = tv(14, Color.WHITE);
+            nm.setText(WidgetView.NAMES[k]);
+            nm.setPadding(dp(2), dp(16), 0, dp(6));
+            col.addView(nm);
+            HorizontalScrollView hs = new HorizontalScrollView(this);
+            hs.setHorizontalScrollBarEnabled(false);
+            LinearLayout rowv = new LinearLayout(this);
+            rowv.setOrientation(LinearLayout.HORIZONTAL);
+            for (int s = 0; s < WidgetView.STYLE_NAMES.length; s++) {
+                final int st = s;
+                LinearLayout cell = new LinearLayout(this);
+                cell.setOrientation(LinearLayout.VERTICAL);
+                int wdp = WidgetView.wide(kind) ? 270 : 150;
+                cell.addView(new WidgetView(this, kind, st),
+                        new LinearLayout.LayoutParams(dp(wdp), dp(WidgetView.heightDp(kind))));
+                TextView sn = tv(11, 0x99FFFFFF);
+                sn.setText(WidgetView.STYLE_NAMES[s]);
+                sn.setGravity(Gravity.CENTER);
+                sn.setPadding(0, dp(4), 0, 0);
+                cell.addView(sn, new LinearLayout.LayoutParams(dp(wdp), WRAP));
+                LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(WRAP, WRAP);
+                cl.rightMargin = dp(10);
+                rowv.addView(cell, cl);
+                cell.setOnClickListener(new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        List<String> cur = bwList();
+                        cur.add(kind + ":" + st);
+                        putCsv("bw", cur);
+                        if (dref[0] != null) dref[0].dismiss();
+                        rebuildPages();
+                        toast("Widget agregado");
+                    }
+                });
+            }
+            hs.addView(rowv);
+            col.addView(hs);
         }
-        col.addView(styles);
 
-        TextView h2 = tv(16, Color.WHITE);
+        TextView h2 = tv(17, Color.WHITE);
         h2.setTypeface(font, Typeface.BOLD);
         h2.setText("Widgets de Android");
-        h2.setPadding(0, dp(20), 0, 0);
+        h2.setPadding(0, dp(26), 0, 0);
         col.addView(h2);
 
         for (int k = 0; k < l.size(); k++) {
@@ -2510,6 +2700,107 @@ public class MainActivity extends Activity {
         sv.addView(col);
         dref[0] = dlg().setView(sv).setNegativeButton("Cancelar", null).create();
         dref[0].show();
+    }
+
+    List<String> bwList() {
+        if (!sp.contains("bw")) {
+            List<String> d0 = new ArrayList<>();
+            d0.add("0:0");
+            d0.add("1:0");
+            return d0;
+        }
+        return csv(sp.getString("bw", ""));
+    }
+
+    void addBuiltinWidgets(LinearLayout col) {
+        List<String> l = bwList();
+        LinearLayout pend = null;
+        for (int i = 0; i < l.size(); i++) {
+            final int idx = i;
+            String[] kv = l.get(i).split(":");
+            int kind, style;
+            try {
+                kind = Integer.parseInt(kv[0]);
+                style = Integer.parseInt(kv[1]);
+            } catch (Exception e) {
+                continue;
+            }
+            if (kind < 0 || kind >= WidgetView.COUNT) continue;
+            WidgetView wv = new WidgetView(this, kind, style);
+            wv.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override public boolean onLongClick(View v) {
+                    bwMenu(idx);
+                    return true;
+                }
+            });
+            if (kind == 7) {
+                wv.setOnClickListener(new View.OnClickListener() {
+                    @Override public void onClick(View v) { noteDialog(); }
+                });
+            }
+            if (WidgetView.wide(kind)) {
+                pend = null;
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(MATCH, dp(WidgetView.heightDp(kind)));
+                lp.topMargin = dp(12);
+                col.addView(wv, lp);
+            } else {
+                if (pend == null || pend.getChildCount() >= 2) {
+                    pend = new LinearLayout(this);
+                    pend.setOrientation(LinearLayout.HORIZONTAL);
+                    LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(MATCH, WRAP);
+                    rl.topMargin = dp(12);
+                    col.addView(pend, rl);
+                }
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(WidgetView.heightDp(kind)), 1f);
+                lp.setMargins(dp(3), 0, dp(3), 0);
+                pend.addView(wv, lp);
+            }
+        }
+    }
+
+    void bwMenu(final int idx) {
+        menu("Widget", new String[]{"Subir", "Cambiar estilo", "Quitar"}, i -> {
+            List<String> l = bwList();
+            if (idx < 0 || idx >= l.size()) return;
+            if (i == 0) {
+                if (idx > 0) {
+                    String t = l.remove(idx);
+                    l.add(idx - 1, t);
+                    putCsv("bw", l);
+                    rebuildPages();
+                }
+            } else if (i == 1) {
+                menu("Estilo", WidgetView.STYLE_NAMES, st -> {
+                    List<String> l2 = bwList();
+                    if (idx >= l2.size()) return;
+                    String[] kv = l2.get(idx).split(":");
+                    l2.set(idx, kv[0] + ":" + st);
+                    putCsv("bw", l2);
+                    rebuildPages();
+                });
+            } else {
+                l.remove(idx);
+                putCsv("bw", l);
+                rebuildPages();
+            }
+        });
+    }
+
+    void noteDialog() {
+        final EditText et = new EditText(this);
+        et.setText(sp.getString("note", ""));
+        et.setTextColor(Color.WHITE);
+        et.setHintTextColor(0x88FFFFFF);
+        et.setHint("Escribe tu nota");
+        et.setMinLines(3);
+        et.setGravity(Gravity.TOP);
+        et.setPadding(dp(20), dp(14), dp(20), dp(14));
+        dlg().setTitle("Nota").setView(et)
+                .setPositiveButton("Guardar", (dg, w) -> {
+                    sp.edit().putString("note", et.getText().toString()).apply();
+                    rebuildPages();
+                })
+                .setNegativeButton("Cancelar", null).show();
     }
 
     void bindWidget(AppWidgetProviderInfo info) {
