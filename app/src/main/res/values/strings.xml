@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="acc_desc">Permite que Mi Launcher bloquee la pantalla con doble toque. No lee ni guarda nada de lo que haces.</string>
+</resources>
