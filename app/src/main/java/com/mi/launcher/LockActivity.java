@@ -44,6 +44,12 @@ public class LockActivity extends Activity {
     int accent;
     TextView clockTv, dateTv;
     DotClockView dotClock;
+    int lstyle;
+    FrameLayout root, pad;
+    TextView padMsg, padDots;
+    final StringBuilder entry = new StringBuilder();
+    int pinLen, fails;
+    long padBlockUntil;
     LinearLayout notifBox;
     GestureDetector gd;
     BroadcastReceiver rx;
@@ -96,7 +102,7 @@ public class LockActivity extends Activity {
         font = Hub.font(this);
         accent = sp.getInt("accent", 0xFFD71921);
 
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         root.setBackgroundColor(0x66000000);
         setContentView(root);
 
@@ -105,24 +111,35 @@ public class LockActivity extends Activity {
         col.setGravity(Gravity.CENTER_HORIZONTAL);
         col.setPadding(dp(20), dp(60), dp(20), dp(120));
 
-        TextView lockIcon = tv(18, 0xCCFFFFFF);
-        lockIcon.setText("\uD83D\uDD12");
-        col.addView(lockIcon);
+        lstyle = sp.getInt("lockstyle", 0);
+        if (lstyle == 2) col.setGravity(Gravity.START);
 
-        int style = sp.getInt("clock", 0);
-        if (style == 1) {
+        col.addView(new Glyph(this, Glyph.LOCK), new LinearLayout.LayoutParams(dp(20), dp(20)));
+
+        dateTv = tv(lstyle == 0 ? 13 : 16, 0xE6FFFFFF);
+        if (lstyle == 0) {
+            dateTv.setTypeface(Typeface.MONOSPACE);
+            dateTv.setLetterSpacing(0.12f);
+        }
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(WRAP, WRAP);
+        dlp.topMargin = dp(lstyle == 1 ? 14 : 8);
+
+        if (lstyle == 1) col.addView(dateTv, dlp);
+
+        if (lstyle == 0) {
             dotClock = new DotClockView(this);
             dotClock.setCell(dp(9));
             dotClock.setColors(Color.WHITE, 0x22FFFFFF);
-            col.addView(dotClock, new LinearLayout.LayoutParams(WRAP, WRAP));
+            LinearLayout.LayoutParams clk = new LinearLayout.LayoutParams(WRAP, WRAP);
+            clk.topMargin = dp(18);
+            col.addView(dotClock, clk);
         } else {
-            clockTv = tv(style == 2 ? 92 : 84, Color.WHITE);
-            if (style == 2) clockTv.setTypeface(Typeface.create("sans-serif-thin", Typeface.NORMAL));
-            else clockTv.setTypeface(font, Typeface.BOLD);
+            clockTv = tv(lstyle == 1 ? 96 : 64, Color.WHITE);
+            clockTv.setTypeface(Typeface.create("sans-serif-thin", Typeface.NORMAL));
+            clockTv.setIncludeFontPadding(false);
             col.addView(clockTv);
         }
-        dateTv = tv(16, 0xCCFFFFFF);
-        col.addView(dateTv);
+        if (lstyle != 1) col.addView(dateTv, dlp);
 
         IslandView card = new IslandView(this);
         card.setEmbedded(true, true);
@@ -143,14 +160,14 @@ public class LockActivity extends Activity {
         bottom.setOrientation(LinearLayout.HORIZONTAL);
         bottom.setGravity(Gravity.CENTER_VERTICAL);
         bottom.setPadding(dp(28), 0, dp(28), dp(36));
-        TextView torch = round("\uD83D\uDD26");
+        View torch = roundGlyph(Glyph.TORCH);
         torch.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { toggleTorch(); }
         });
         TextView hint = tv(13, 0xCCFFFFFF);
         hint.setText("Desliza hacia arriba para desbloquear");
         hint.setGravity(Gravity.CENTER);
-        TextView cam = round("\uD83D\uDCF7");
+        View cam = roundGlyph(Glyph.CAMERA);
         cam.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { openCamera(); }
         });
@@ -200,7 +217,8 @@ public class LockActivity extends Activity {
         if (clockTv != null) clockTv.setText(t);
         if (dotClock != null) dotClock.setText(t);
         String ds = new SimpleDateFormat("EEEE d 'de' MMMM", new Locale("es", "MX")).format(now);
-        dateTv.setText(ds.substring(0, 1).toUpperCase(new Locale("es")) + ds.substring(1));
+        String dsf = ds.substring(0, 1).toUpperCase(new Locale("es")) + ds.substring(1);
+        dateTv.setText(lstyle == 0 ? dsf.toUpperCase(new Locale("es")) : dsf);
     }
 
     void fillNotifs() {
@@ -243,7 +261,127 @@ public class LockActivity extends Activity {
         }
     }
 
+    View roundGlyph(int type) {
+        FrameLayout f = new FrameLayout(this);
+        f.setBackground(glass(0x44000000, 0x55FFFFFF, 26));
+        f.addView(new Glyph(this, type), new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
+        return f;
+    }
+
     void unlock() {
+        if (Hub.pinLen(this) > 0) showPad();
+        else doUnlock();
+    }
+
+    void showPad() {
+        if (pad != null) return;
+        pinLen = Hub.pinLen(this);
+        entry.setLength(0);
+        pad = new FrameLayout(this);
+        pad.setBackgroundColor(0xEE000000);
+        pad.setClickable(true);
+
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setGravity(Gravity.CENTER);
+
+        padMsg = tv(16, Color.WHITE);
+        padMsg.setText("Ingresa tu PIN");
+        padMsg.setGravity(Gravity.CENTER);
+        c.addView(padMsg, new LinearLayout.LayoutParams(WRAP, WRAP));
+
+        padDots = tv(24, Color.WHITE);
+        padDots.setLetterSpacing(0.2f);
+        padDots.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams pdl = new LinearLayout.LayoutParams(WRAP, WRAP);
+        pdl.topMargin = dp(16);
+        pdl.bottomMargin = dp(28);
+        c.addView(padDots, pdl);
+
+        String[] keys = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "Cancelar", "0", "Borrar"};
+        for (int r = 0; r < 4; r++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER);
+            for (int k = 0; k < 3; k++) {
+                final String key = keys[r * 3 + k];
+                TextView b = tv(key.length() > 1 ? 13 : 26, Color.WHITE);
+                b.setGravity(Gravity.CENTER);
+                if (key.length() == 1) b.setBackground(glass(0x1AFFFFFF, 0x55FFFFFF, 36));
+                b.setText(key);
+                b.setOnClickListener(new View.OnClickListener() {
+                    @Override public void onClick(View v) { padKey(key); }
+                });
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(72), dp(72));
+                lp.setMargins(dp(10), dp(7), dp(10), dp(7));
+                row.addView(b, lp);
+            }
+            c.addView(row, new LinearLayout.LayoutParams(WRAP, WRAP));
+        }
+        pad.addView(c, new FrameLayout.LayoutParams(MATCH, MATCH));
+        root.addView(pad, new FrameLayout.LayoutParams(MATCH, MATCH));
+        updatePadDots();
+    }
+
+    void updatePadDots() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < pinLen; i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(i < entry.length() ? "\u25CF" : "\u25CB");
+        }
+        padDots.setText(sb.toString());
+    }
+
+    void closePad() {
+        if (pad != null) {
+            root.removeView(pad);
+            pad = null;
+        }
+        entry.setLength(0);
+    }
+
+    void padKey(String k) {
+        if (k.equals("Cancelar")) {
+            closePad();
+            return;
+        }
+        if (System.currentTimeMillis() < padBlockUntil) {
+            padMsg.setText("Demasiados intentos. Espera un momento");
+            return;
+        }
+        if (k.equals("Borrar")) {
+            if (entry.length() > 0) entry.setLength(entry.length() - 1);
+            updatePadDots();
+            return;
+        }
+        if (entry.length() >= pinLen) return;
+        entry.append(k);
+        updatePadDots();
+        if (entry.length() == pinLen) {
+            if (Hub.pinOk(this, entry.toString())) {
+                fails = 0;
+                closePad();
+                doUnlock();
+            } else {
+                fails++;
+                entry.setLength(0);
+                updatePadDots();
+                padMsg.setText("PIN incorrecto");
+                padDots.animate().translationX(dp(12)).setDuration(60).withEndAction(new Runnable() {
+                    @Override public void run() {
+                        if (padDots != null) padDots.animate().translationX(0).setDuration(120).start();
+                    }
+                }).start();
+                if (fails >= 5) {
+                    padBlockUntil = System.currentTimeMillis() + 30000;
+                    fails = 0;
+                    padMsg.setText("Demasiados intentos. Espera 30 s");
+                }
+            }
+        }
+    }
+
+    void doUnlock() {
         try {
             KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
             km.requestDismissKeyguard(this, new KeyguardManager.KeyguardDismissCallback() {
@@ -289,7 +427,9 @@ public class LockActivity extends Activity {
     }
 
     @Override
-    public void onBackPressed() { }
+    public void onBackPressed() {
+        if (pad != null) closePad();
+    }
 
     @Override
     protected void onResume() {

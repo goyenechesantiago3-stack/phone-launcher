@@ -118,7 +118,8 @@ public class MainActivity extends Activity {
     LinearLayout pagesLL, dock, dots, notifBox;
     SnapScroll pager;
     TextView clockTv, greetTv, dateTv, tvTime, tvNet, tvBatt, calDay, calMon, battTv;
-    DotClockView dotClock;
+    DotClockView dotClock, calDot;
+    DotRowView battDots;
     BarView battBar;
     IslandView island;
     GridView grid;
@@ -1089,35 +1090,115 @@ public class MainActivity extends Activity {
         return pg;
     }
 
-    View calendarCard() {
+    int battPctNow() {
+        try {
+            Intent b = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            int lvl = b == null ? 0 : b.getIntExtra(BatteryManager.EXTRA_LEVEL, 0);
+            int sc = b == null ? 100 : b.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+            return sc > 0 ? lvl * 100 / sc : lvl;
+        } catch (Exception e) {
+            return 50;
+        }
+    }
+
+    View calendarCard() { return calendarCard(sp.getInt("wstyle", 0), true); }
+
+    // style 0 = iPhone, 1 = Nothing. live=false es solo para la vista previa.
+    View calendarCard(int style, boolean live) {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setGravity(Gravity.CENTER);
-        c.setBackground(glass(glassFill(), 0x66FFFFFF, 24));
-        calMon = tv(13, accent);
-        calDay = tv(46, Color.WHITE);
-        calDay.setTypeface(font, Typeface.BOLD);
-        c.addView(calMon);
-        c.addView(calDay);
+        c.setGravity(Gravity.CENTER_VERTICAL);
+        Date now = new Date();
+        Locale es = new Locale("es", "MX");
+        String dnum = new SimpleDateFormat("d", es).format(now);
+        if (style == 1) {
+            c.setPadding(dp(16), dp(8), dp(16), dp(8));
+            c.setBackground(glass(0x66000000, 0xCCFFFFFF, 22));
+            TextView m = tv(12, Color.WHITE);
+            m.setTypeface(Typeface.MONOSPACE);
+            m.setLetterSpacing(0.1f);
+            m.setText(new SimpleDateFormat("EEE \u00B7 MMM", es).format(now).toUpperCase(es));
+            DotClockView dd = new DotClockView(this);
+            dd.setCell(dp(7));
+            dd.setColors(Color.WHITE, 0x22FFFFFF);
+            dd.setText(dnum);
+            c.addView(m);
+            LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(WRAP, WRAP);
+            dl.topMargin = dp(10);
+            c.addView(dd, dl);
+            if (live) {
+                calMon = m;
+                calDot = dd;
+                calDay = null;
+            }
+        } else {
+            c.setPadding(dp(18), dp(8), dp(16), dp(8));
+            c.setBackground(glass(glassFill(), 0x44FFFFFF, 26));
+            TextView m = tv(13, 0xCCFFFFFF);
+            m.setText(new SimpleDateFormat("EEEE", es).format(now).toUpperCase(es));
+            TextView d = tv(48, Color.WHITE);
+            d.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+            d.setText(dnum);
+            c.addView(m);
+            c.addView(d);
+            if (live) {
+                calMon = m;
+                calDay = d;
+                calDot = null;
+            }
+        }
         return c;
     }
 
-    View batteryCard() {
+    View batteryCard() { return batteryCard(sp.getInt("wstyle", 0), true); }
+
+    View batteryCard(int style, boolean live) {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setGravity(Gravity.CENTER);
+        c.setGravity(Gravity.CENTER_VERTICAL);
         c.setPadding(dp(16), dp(8), dp(16), dp(8));
-        c.setBackground(glass(glassFill(), 0x66FFFFFF, 24));
-        TextView t = tv(13, accent);
-        t.setText("BATERÍA");
-        battTv = tv(38, Color.WHITE);
-        battTv.setTypeface(font, Typeface.BOLD);
-        battBar = new BarView(this);
-        c.addView(t);
-        c.addView(battTv);
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(MATCH, dp(8));
-        blp.topMargin = dp(8);
-        c.addView(battBar, blp);
+        int pct = battPctNow();
+        if (style == 1) {
+            c.setBackground(glass(0x66000000, 0xCCFFFFFF, 22));
+            TextView t = tv(12, Color.WHITE);
+            t.setTypeface(Typeface.MONOSPACE);
+            t.setLetterSpacing(0.1f);
+            t.setText("BATER\u00CDA");
+            TextView pv = tv(30, Color.WHITE);
+            pv.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+            pv.setText(pct + "%");
+            DotRowView dots = new DotRowView(this);
+            dots.set(pct / 100f, Color.WHITE);
+            c.addView(t);
+            c.addView(pv);
+            LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(MATCH, dp(12));
+            dl.topMargin = dp(8);
+            c.addView(dots, dl);
+            if (live) {
+                battTv = pv;
+                battDots = dots;
+                battBar = null;
+            }
+        } else {
+            c.setBackground(glass(glassFill(), 0x44FFFFFF, 26));
+            TextView t = tv(13, 0xCCFFFFFF);
+            t.setText("Bater\u00EDa");
+            TextView pv = tv(38, Color.WHITE);
+            pv.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+            pv.setText(pct + "%");
+            BarView bar = new BarView(this);
+            bar.set(pct / 100f, Color.WHITE);
+            c.addView(t);
+            c.addView(pv);
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(MATCH, dp(8));
+            bl.topMargin = dp(8);
+            c.addView(bar, bl);
+            if (live) {
+                battTv = pv;
+                battBar = bar;
+                battDots = null;
+            }
+        }
         return c;
     }
 
@@ -1139,9 +1220,15 @@ public class MainActivity extends Activity {
         if (dateTv != null) {
             dateTv.setText(upper(new SimpleDateFormat("EEEE d 'de' MMMM", es).format(now)));
         }
-        if (calDay != null) {
-            calDay.setText(new SimpleDateFormat("d", es).format(now));
-            calMon.setText(new SimpleDateFormat("EEE \u00B7 MMM", es).format(now).toUpperCase(es));
+        if (calMon != null) {
+            String dnum = new SimpleDateFormat("d", es).format(now);
+            if (calDot != null) {
+                calDot.setText(dnum);
+                calMon.setText(new SimpleDateFormat("EEE \u00B7 MMM", es).format(now).toUpperCase(es));
+            } else {
+                calMon.setText(new SimpleDateFormat("EEEE", es).format(now).toUpperCase(es));
+            }
+            if (calDay != null) calDay.setText(dnum);
         }
     }
 
@@ -1153,9 +1240,11 @@ public class MainActivity extends Activity {
             int st = b == null ? -1 : b.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
             boolean chg = st == BatteryManager.BATTERY_STATUS_CHARGING || st == BatteryManager.BATTERY_STATUS_FULL;
             int pct = sc > 0 ? lvl * 100 / sc : lvl;
-            if (tvBatt != null) tvBatt.setText((chg ? "\u26A1" : "") + pct + "%");
+            if (tvBatt != null) tvBatt.setText((chg ? "+" : "") + pct + "%");
             if (battTv != null) battTv.setText(pct + "%");
-            if (battBar != null) battBar.set(pct / 100f, pct <= 20 && !chg ? 0xFFFF3B30 : accent);
+            int bcol = pct <= 20 && !chg ? 0xFFFF3B30 : Color.WHITE;
+            if (battBar != null) battBar.set(pct / 100f, bcol);
+            if (battDots != null) battDots.set(pct / 100f, bcol);
             if (tvNet != null) {
                 ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
                 NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
@@ -1196,13 +1285,12 @@ public class MainActivity extends Activity {
         search.setBackground(glass(glassFill(), 0x55FFFFFF, 26));
         bar.addView(search, new LinearLayout.LayoutParams(0, WRAP, 1f));
 
-        TextView gear = tv(26, Color.WHITE);
-        gear.setText("\u2699");
-        gear.setPadding(dp(14), dp(6), dp(6), dp(6));
+        Glyph gear = new Glyph(this, Glyph.GEAR);
+        gear.setPadding(dp(10), dp(10), dp(10), dp(10));
         gear.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { showSettings(); }
         });
-        bar.addView(gear);
+        bar.addView(gear, new LinearLayout.LayoutParams(dp(46), dp(46)));
         col.addView(bar);
 
         adapter = new AppAdapter();
@@ -1308,11 +1396,18 @@ public class MainActivity extends Activity {
 
     // ---- panel de control y notificaciones
 
-    TextView tile(String icon, String label, final Runnable r) {
-        TextView t = tv(13, Color.WHITE);
-        t.setText(icon + "\n" + label);
+    View tile(int glyph, String label, final Runnable r) {
+        LinearLayout t = new LinearLayout(this);
+        t.setOrientation(LinearLayout.VERTICAL);
         t.setGravity(Gravity.CENTER);
         t.setBackground(glass(glassFill(), 0x66FFFFFF, 20));
+        t.addView(new Glyph(this, glyph), new LinearLayout.LayoutParams(dp(26), dp(26)));
+        TextView l = tv(12, Color.WHITE);
+        l.setText(label);
+        l.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(WRAP, WRAP);
+        ll.topMargin = dp(6);
+        t.addView(l, ll);
         t.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
@@ -1358,20 +1453,20 @@ public class MainActivity extends Activity {
 
         LinearLayout tiles = new LinearLayout(this);
         tiles.setOrientation(LinearLayout.HORIZONTAL);
-        tiles.addView(tile("\uD83D\uDCF6", "Internet", new Runnable() {
+        tiles.addView(tile(Glyph.WIFI, "Internet", new Runnable() {
             @Override public void run() {
                 startActivity(new Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY));
             }
         }), tileLp());
-        tiles.addView(tile("\uD83D\uDD35", "Bluetooth", new Runnable() {
+        tiles.addView(tile(Glyph.BT, "Bluetooth", new Runnable() {
             @Override public void run() {
                 startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS));
             }
         }), tileLp());
-        tiles.addView(tile("\uD83D\uDD26", "Linterna", new Runnable() {
+        tiles.addView(tile(Glyph.TORCH, "Linterna", new Runnable() {
             @Override public void run() { toggleTorch(); }
         }), tileLp());
-        tiles.addView(tile("\u2699", "Ajustes", new Runnable() {
+        tiles.addView(tile(Glyph.GEAR, "Ajustes", new Runnable() {
             @Override public void run() {
                 startActivity(new Intent(Settings.ACTION_SETTINGS));
             }
@@ -1458,7 +1553,7 @@ public class MainActivity extends Activity {
         col.addView(notifBox, nbl);
 
         TextView close = tv(14, 0xCCFFFFFF);
-        close.setText("\u2303  Cerrar");
+        close.setText("Cerrar");
         close.setGravity(Gravity.CENTER);
         close.setPadding(0, dp(18), 0, dp(10));
         close.setOnClickListener(new View.OnClickListener() {
@@ -2064,15 +2159,16 @@ public class MainActivity extends Activity {
         SharedPreferences.Editor e = sp.edit();
         if (p == 0) {
             e.putInt("shape", 1).putBoolean("mono", false).putInt("accent", 0xFF0A84FF)
-                    .putInt("glass", 2).putInt("clock", 0).putInt("anim", 0).putBoolean("blur", true);
+                    .putInt("glass", 2).putInt("clock", 0).putInt("anim", 0).putBoolean("blur", true).putInt("wstyle", 0).putInt("lockstyle", 1).putInt("fontstyle", 1);
         } else if (p == 1) {
             e.putInt("shape", 0).putBoolean("mono", true).putInt("accent", 0xFFD71921)
-                    .putInt("glass", 0).putInt("clock", 1).putInt("anim", 1).putBoolean("blur", false);
+                    .putInt("glass", 0).putInt("clock", 1).putInt("anim", 1).putBoolean("blur", false).putInt("wstyle", 1).putInt("lockstyle", 0).putInt("fontstyle", 2);
         } else {
             e.putInt("shape", 2).putBoolean("mono", false).putInt("accent", 0xFFFF2D95)
-                    .putInt("glass", 1).putInt("clock", 2).putInt("anim", 0).putBoolean("blur", true);
+                    .putInt("glass", 1).putInt("clock", 2).putInt("anim", 0).putBoolean("blur", true).putInt("wstyle", 0).putInt("lockstyle", 2).putInt("fontstyle", 0);
         }
         e.apply();
+        font = Hub.font(this);
         cache.clear();
         rebuildUi();
     }
@@ -2116,15 +2212,26 @@ public class MainActivity extends Activity {
     }
 
     void fontMenu() {
-        menu("Fuente", new String[]{"Cambiar fuente (archivo .ttf)", "Restablecer fuente"}, i -> {
-            if (i == 0) {
+        menu("Fuente", new String[]{
+                "Estilo iPhone (sans-serif limpia)",
+                "Estilo Nothing (monoespaciada)",
+                "Estilo normal",
+                "Cambiar fuente (archivo .ttf)",
+                "Restablecer fuente"}, i -> {
+            if (i <= 2) {
+                new File(getFilesDir(), "font.ttf").delete();
+                sp.edit().remove("font").putInt("fontstyle", i == 0 ? 1 : i == 1 ? 2 : 0).apply();
+                font = Hub.font(this);
+                cache.clear();
+                rebuildUi();
+            } else if (i == 3) {
                 Intent it = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 it.addCategory(Intent.CATEGORY_OPENABLE);
                 it.setType("*/*");
                 startActivityForResult(it, REQ_FONT);
             } else {
                 new File(getFilesDir(), "font.ttf").delete();
-                sp.edit().remove("font").apply();
+                sp.edit().remove("font").putInt("fontstyle", 0).apply();
                 font = Hub.font(this);
                 rebuildUi();
             }
@@ -2202,25 +2309,59 @@ public class MainActivity extends Activity {
         });
     }
 
+    void pinDialog() {
+        final EditText et = new EditText(this);
+        et.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+                | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        et.setHint("4 a 8 d\u00EDgitos");
+        et.setTextColor(Color.WHITE);
+        et.setHintTextColor(0x88FFFFFF);
+        et.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(8)});
+        et.setPadding(dp(24), dp(16), dp(24), dp(16));
+        dlg().setTitle(Hub.pinLen(this) > 0 ? "Cambiar PIN" : "Crear PIN").setView(et)
+                .setPositiveButton("Guardar", (dg, w) -> {
+                    String p = et.getText().toString();
+                    if (p.length() < 4) {
+                        toast("El PIN debe tener al menos 4 d\u00EDgitos");
+                        return;
+                    }
+                    Hub.setPin(this, p);
+                    toast("PIN guardado");
+                })
+                .setNegativeButton("Cancelar", null).show();
+    }
+
     void lockMenu() {
         final boolean on = sp.getBoolean("lock_on", false);
         menu("Pantalla de bloqueo propia", new String[]{
                 chk(on, "Usar mi pantalla de bloqueo"),
                 "Probarla ahora",
+                "Estilo de la pantalla de bloqueo",
+                Hub.pinLen(this) > 0 ? "Cambiar PIN" : "Crear PIN",
+                "Quitar PIN",
                 (overlayOk() ? "\u2713 " : "\u2717 ") + "Permiso: mostrar sobre otras apps",
                 (notifAccess() ? "\u2713 " : "\u2717 ") + "Acceso a notificaciones (mantiene activo el servicio)"}, i -> {
             switch (i) {
                 case 0:
                     sp.edit().putBoolean("lock_on", !on).apply();
                     if (!on) {
-                        toast("Al apagar la pantalla ver\u00E1s tu bloqueo. Se desbloquea con tu PIN o huella del sistema.");
+                        toast("Al apagar la pantalla ver\u00E1s tu bloqueo. Cr\u00E9ale un PIN en este mismo men\u00FA.");
                         if (!overlayOk()) askOverlay();
                         else if (!notifAccess()) askNotifAccess();
                     }
                     break;
                 case 1: startActivity(new Intent(this, LockActivity.class)); break;
-                case 2: askOverlay(); break;
-                case 3: askNotifAccess(); break;
+                case 2:
+                    pickInt("Estilo de bloqueo", new String[]{"Nothing (reloj de puntos)", "iPhone (reloj fino grande)", "Minimalista (a la izquierda)"},
+                            "lockstyle", new int[]{0, 1, 2});
+                    break;
+                case 3: pinDialog(); break;
+                case 4:
+                    Hub.clearPin(this);
+                    toast("PIN quitado");
+                    break;
+                case 5: askOverlay(); break;
+                case 6: askNotifAccess(); break;
                 default: break;
             }
         });
@@ -2270,11 +2411,105 @@ public class MainActivity extends Activity {
 
     void pickWidget() {
         final List<AppWidgetProviderInfo> l = awm.getInstalledProviders();
-        String[] n = new String[l.size()];
-        for (int k = 0; k < n.length; k++) {
-            n[k] = l.get(k).loadLabel(pm) + " \u00B7 " + l.get(k).provider.getPackageName();
+        final AlertDialog[] dref = new AlertDialog[1];
+        ScrollView sv = new ScrollView(this);
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setPadding(dp(16), dp(12), dp(16), dp(12));
+
+        TextView h1 = tv(16, Color.WHITE);
+        h1.setTypeface(font, Typeface.BOLD);
+        h1.setText("Widgets del launcher");
+        col.addView(h1);
+        TextView sub = tv(12, 0xAAFFFFFF);
+        sub.setText("Toca un estilo para aplicarlo");
+        col.addView(sub);
+
+        LinearLayout styles = new LinearLayout(this);
+        styles.setOrientation(LinearLayout.HORIZONTAL);
+        String[] sn = {"iPhone", "Nothing"};
+        int cur = sp.getInt("wstyle", 0);
+        for (int s = 0; s < 2; s++) {
+            final int st = s;
+            LinearLayout cc = new LinearLayout(this);
+            cc.setOrientation(LinearLayout.VERTICAL);
+            cc.setPadding(dp(4), dp(10), dp(4), dp(4));
+            TextView nm = tv(13, cur == s ? Color.WHITE : 0xAAFFFFFF);
+            nm.setText((cur == s ? "\u2713 " : "") + sn[s]);
+            nm.setGravity(Gravity.CENTER);
+            cc.addView(nm, new LinearLayout.LayoutParams(MATCH, WRAP));
+            LinearLayout.LayoutParams c1 = new LinearLayout.LayoutParams(MATCH, dp(104));
+            c1.topMargin = dp(6);
+            c1.setMargins(dp(4), dp(6), dp(4), 0);
+            cc.addView(calendarCard(s, false), c1);
+            LinearLayout.LayoutParams c2 = new LinearLayout.LayoutParams(MATCH, dp(104));
+            c2.setMargins(dp(4), dp(8), dp(4), 0);
+            cc.addView(batteryCard(s, false), c2);
+            cc.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    sp.edit().putInt("wstyle", st).apply();
+                    if (dref[0] != null) dref[0].dismiss();
+                    rebuildUi();
+                }
+            });
+            styles.addView(cc, new LinearLayout.LayoutParams(0, WRAP, 1f));
         }
-        menu("Elegir widget", n, ix -> bindWidget(l.get(ix)));
+        col.addView(styles);
+
+        TextView h2 = tv(16, Color.WHITE);
+        h2.setTypeface(font, Typeface.BOLD);
+        h2.setText("Widgets de Android");
+        h2.setPadding(0, dp(20), 0, 0);
+        col.addView(h2);
+
+        for (int k = 0; k < l.size(); k++) {
+            final AppWidgetProviderInfo info = l.get(k);
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(dp(12), dp(10), dp(12), dp(10));
+            row.setBackground(glass(0x14FFFFFF, 0x33FFFFFF, 16));
+            TextView t1 = tv(14, Color.WHITE);
+            t1.setText(String.valueOf(info.loadLabel(pm)));
+            TextView t2 = tv(11, 0x99FFFFFF);
+            t2.setText(appLabel(info.provider.getPackageName()));
+            row.addView(t1);
+            row.addView(t2);
+            Drawable pv = null;
+            try {
+                pv = info.loadPreviewImage(this, 0);
+            } catch (Exception e) {
+                pv = null;
+            }
+            if (pv == null) {
+                try {
+                    pv = info.loadIcon(this, 0);
+                } catch (Exception e) {
+                    pv = null;
+                }
+            }
+            if (pv != null) {
+                ImageView iv = new ImageView(this);
+                iv.setImageDrawable(pv);
+                iv.setAdjustViewBounds(true);
+                iv.setMaxHeight(dp(130));
+                iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(MATCH, WRAP);
+                ilp.topMargin = dp(8);
+                row.addView(iv, ilp);
+            }
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (dref[0] != null) dref[0].dismiss();
+                    bindWidget(info);
+                }
+            });
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(MATCH, WRAP);
+            rlp.topMargin = dp(8);
+            col.addView(row, rlp);
+        }
+        sv.addView(col);
+        dref[0] = dlg().setView(sv).setNegativeButton("Cancelar", null).create();
+        dref[0].show();
     }
 
     void bindWidget(AppWidgetProviderInfo info) {

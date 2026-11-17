@@ -60,6 +60,42 @@ final class Hub {
                 }
             }
         }
+        int fs = c.getSharedPreferences("launcher", Context.MODE_PRIVATE).getInt("fontstyle", 0);
+        if (fs == 1) return Typeface.create("sans-serif", Typeface.NORMAL);
+        if (fs == 2) return Typeface.MONOSPACE;
         return Typeface.create("sans-serif-medium", Typeface.NORMAL);
+    }
+
+    static String pinHash(String pin) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] d = md.digest(("mi-launcher:" + pin).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte x : d) sb.append(String.format("%02x", x));
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    static int pinLen(Context c) {
+        android.content.SharedPreferences s = c.getSharedPreferences("launcher", Context.MODE_PRIVATE);
+        String h = s.getString("pin_hash", "");
+        return h == null || h.isEmpty() ? 0 : s.getInt("pin_len", 0);
+    }
+
+    static void setPin(Context c, String pin) {
+        c.getSharedPreferences("launcher", Context.MODE_PRIVATE).edit()
+                .putString("pin_hash", pinHash(pin)).putInt("pin_len", pin.length()).apply();
+    }
+
+    static void clearPin(Context c) {
+        c.getSharedPreferences("launcher", Context.MODE_PRIVATE).edit()
+                .remove("pin_hash").remove("pin_len").apply();
+    }
+
+    static boolean pinOk(Context c, String pin) {
+        String h = c.getSharedPreferences("launcher", Context.MODE_PRIVATE).getString("pin_hash", "");
+        return h != null && !h.isEmpty() && h.equals(pinHash(pin));
     }
 }

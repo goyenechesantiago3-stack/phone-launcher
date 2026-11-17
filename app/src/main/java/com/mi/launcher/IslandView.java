@@ -34,7 +34,8 @@ public class IslandView extends FrameLayout {
     boolean expanded, embedded, hideEmpty;
     LinearLayout pill, top, textCol, controls, bars;
     ImageView cover;
-    TextView title, artist, note, prev, play, next;
+    TextView title, artist, note;
+    Glyph prev, play, next;
     View[] bar = new View[4];
     View spacer;
     BarView prog;
@@ -138,12 +139,12 @@ public class IslandView extends FrameLayout {
         controls = new LinearLayout(c);
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER);
-        prev = btn(c, "\u23EE");
-        play = btn(c, "\u25B6");
-        next = btn(c, "\u23ED");
-        controls.addView(prev);
-        controls.addView(play);
-        controls.addView(next);
+        prev = gbtn(c, Glyph.PREV);
+        play = gbtn(c, Glyph.PLAY);
+        next = gbtn(c, Glyph.NEXT);
+        controls.addView(prev, gl());
+        controls.addView(play, gl());
+        controls.addView(next, gl());
         pill.addView(controls, new LinearLayout.LayoutParams(WRAP, WRAP));
 
         note = new TextView(c);
@@ -209,6 +210,18 @@ public class IslandView extends FrameLayout {
                 }
             }
         });
+    }
+
+    Glyph gbtn(Context c, int type) {
+        Glyph g = new Glyph(c, type);
+        g.setPadding(dp(13), dp(13), dp(13), dp(13));
+        return g;
+    }
+
+    LinearLayout.LayoutParams gl() {
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(dp(52), dp(52));
+        l.setMargins(dp(4), dp(2), dp(4), dp(2));
+        return l;
     }
 
     TextView btn(Context c, String s) {
@@ -289,7 +302,7 @@ public class IslandView extends FrameLayout {
             controls.setVisibility(View.GONE);
             note.setVisibility(View.VISIBLE);
             if (noteMode) {
-                note.setText(chg ? "\u26A1 " + Hub.battPct + "%" : join(Hub.peekTitle, Hub.peekText));
+                note.setText(chg ? "Cargando " + Hub.battPct + "%" : join(Hub.peekTitle, Hub.peekText));
                 long rem = Math.max(Hub.peekUntil, Hub.chargeUntil) - SystemClock.uptimeMillis();
                 if (rem > 0) {
                     h.removeCallbacks(refresher);
@@ -319,7 +332,7 @@ public class IslandView extends FrameLayout {
         spacer.setVisibility(ex ? View.GONE : View.VISIBLE);
         prog.setVisibility(ex ? View.VISIBLE : View.GONE);
         controls.setVisibility(ex ? View.VISIBLE : View.GONE);
-        play.setText(Hub.playing ? "\u23F8" : "\u25B6");
+        play.setType(Hub.playing ? Glyph.PAUSE : Glyph.PLAY);
         setPillWidth(ex);
         updateProg();
     }
